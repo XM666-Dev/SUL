@@ -137,6 +137,10 @@ function get_children(entity)
     return EntityGetAllChildren(entity) or {}
 end
 
+function get_inventory_items(entity)
+    return GameGetAllInventoryItems(entity) or {}
+end
+
 function get_camera_corner()
     local camera_x, camera_y = GameGetCameraPos()
     local x, y, w, h = GameGetCameraBounds()
@@ -320,6 +324,10 @@ end
 
 function lerp_clamped(from, to, weight)
     return lerp(from, to, clamp(weight, 0, 1))
+end
+
+function point_in_rectangle(x, y, left, up, right, down)
+    return x >= left and x <= right and y >= up and y <= down
 end
 
 --#endregion
