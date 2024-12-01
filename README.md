@@ -1,2 +1,2 @@
 # sul
- Spirit Universal Laboratory
+ The Spirit Universal Laboratory.
