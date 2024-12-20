@@ -1,10 +1,10 @@
 # sul
- The Spirit Universal Laboratory for Noita modding.
+The Spirit Universal Laboratory for Noita modding.
 
- Includes:
+Includes:
 
-  Tactic - General library
+Tactic - General library
 
-  Environment - Compatibility bridge
-  
-  Input - Input Interface
+Environment - Compatibility bridge
+
+Input - Input Interface
