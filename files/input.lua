@@ -1,10 +1,7 @@
-local env = {}
-setfenv(0, env)
 local f = loadfile("data/scripts/debug/keycodes.lua")
-setfenv(0, _G)
-if f ~= nil then
-    f()
-end
+f()
+local env = {}
+setfenv(f, env)()
 local mouse_buttons = {}
 local keys = {}
 local joy_buttons = {}
