@@ -304,6 +304,21 @@ function lerp_clamped(from, to, weight)
     return lerp(from, to, clamp(weight, 0, 1))
 end
 
+function lerp_angle(from, to, weight)
+    local diff = (to - from + math.pi) % (2 * math.pi) - math.pi
+    return from + diff * weight
+end
+
+function lerp_angle_vec(x1, y1, x2, y2, weight)
+    local angle1 = math.atan2(y1, x1)
+    local angle2 = math.atan2(y2, x2)
+    local lerped_angle = lerp_angle(angle1, angle2, weight)
+    local length1 = math.sqrt(x1 * x1 + y1 * y1)
+    local length2 = math.sqrt(x2 * x2 + y2 * y2)
+    local lerped_length = lerp(length1, length2, weight)
+    return math.cos(lerped_angle) * lerped_length, math.sin(lerped_angle) * lerped_length
+end
+
 function warp(value, from, to)
     return (value - from) % (to - from) + from
 end

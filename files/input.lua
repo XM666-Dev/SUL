@@ -68,17 +68,76 @@ function read_input_just(input)
     end
 end
 
+local punctuations = {
+    MINUS = "-",
+    EQUALS = "=",
+    LEFTBRACKET = "[",
+    RIGHTBRACKET = "]",
+    BACKSLASH = "\\",
+    NONUSHASH = "#",
+    SEMICOLON = ";",
+    APOSTROPHE = "'",
+    GRAVE = "`",
+    COMMA = ",",
+    PERIOD = ".",
+    SLASH = "/",
+    NUMLOCKCLEAR = "NUMLOCK",
+    KP_DIVIDE = "/",
+    KP_MULTIPLY = "*",
+    KP_MINUS = "-",
+    KP_PLUS = "+",
+    KP_PERIOD = ".",
+    NONUSBACKSLASH = "\\",
+    APPLICATION = "MENU",
+    POWER = "SHUTDOWN",
+    KP_EQUALS = "=",
+    KP_COMMA = ",",
+    KP_EQUALSAS400 = "=",
+    KP_LEFTPAREN = "(",
+    KP_RIGHTPAREN = ")",
+    KP_LEFTBRACE = "{",
+    KP_RIGHTBRACE = "}",
+    KP_XOR = "^",
+    KP_POWER = "SHUTDOWN",
+    KP_PERCENT = "%",
+    KP_LESS = "<",
+    KP_GREATER = ">",
+    KP_AMPERSAND = "&",
+    KP_DBLAMPERSAND = "&&",
+    KP_VERTICALBAR = "|",
+    KP_DBLVERTICALBAR = "||",
+    KP_COLON = ":",
+    KP_HASH = "#",
+    KP_AT = "@",
+    KP_EXCLAM = "!",
+    KP_PLUSMINUS = "+-",
+    LCTRL = "LEFT CTRL",
+    LSHIFT = "LEFT SHIFT",
+    LALT = "LEFT ALT",
+    LGUI = "LEFT WINDOWS",
+    RCTRL = "RIGHT CTRL",
+    RSHIFT = "RIGHT SHIFT",
+    RALT = "RIGHT ALT",
+    RGUI = "RIGHT WINDOWS",
+}
 ---@param input string
 ---@return string?
 function get_input_text(input)
     if input:find("^Mouse_") then
-        return GameTextGet("$input_" .. input:gsub("_", ""):lower())
+        return GameTextGet("$input_" .. input:gsub("_", ""):lower()):upper()
     elseif input:find("^Key_") then
         local text = input:sub(5)
         local prefix = ""
+        local punctuation = punctuations[text]
         if text:find("^KP_") then
             text = text:sub(4)
             prefix = "KEYPAD "
+        elseif text:find("^AC_") then
+            text = text:sub(4)
+            prefix = "AC "
+        end
+        if punctuation ~= nil then
+            text = punctuation
         end
         return prefix .. text:upper()
     elseif input:find("^JOY_BUTTON_") then
