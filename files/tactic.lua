@@ -82,14 +82,14 @@ function get_pos_in_world(x, y, gui)
         y / screen_height * resolution_height + camera_y - bounds_height / 2 - tonumber(MagicNumbersGetValue("VIRTUAL_RESOLUTION_OFFSET_Y"))
 end
 
-function get_attack_index(attacks)
+function get_last_component(components)
     local index = 0
-    for i, v in ipairs(attacks) do
+    for i, v in ipairs(components) do
         if ComponentGetIsEnabled(v) then
             index = i
         end
     end
-    return index
+    return index, components[index]
 end
 
 function get_attack_table(entity, ai, attacks)
@@ -110,8 +110,9 @@ function get_attack_table(entity, ai, attacks)
         offset_x = ComponentGetValue2(ai, "attack_ranged_offset_x")
         offset_y = ComponentGetValue2(ai, "attack_ranged_offset_y")
     end
+    local x, y = EntityGetTransform(entity)
     for i, attack in ipairs(attacks) do
-        SetRandomSeed(get_frame_num_next())
+        SetRandomSeed(x + 0.11231 + GameGetFrameNum(), y + 0.2341)
         if Random(100) <= ComponentGetValue2(attack, "use_probability") then
             animation_name = ComponentGetValue2(attack, "animation_name")
             frames_between = ComponentGetValue2(attack, "frames_between")
@@ -124,7 +125,7 @@ function get_attack_table(entity, ai, attacks)
         end
     end
     if entity_file == "data/entities/projectiles/acidshot.xml" and EntityGetFilename(entity) ~= "data/entities/animals/acidshooter.xml" then
-        return
+        entity_file = nil
     end
     return {
         animation_name = animation_name,
@@ -138,10 +139,7 @@ function get_attack_table(entity, ai, attacks)
     }
 end
 
-function get_attack_ranged_pos(entity)
-    local ai = EntityGetFirstComponentIncludingDisabled(entity, "AnimalAIComponent")
-    local attacks = EntityGetComponent(entity, "AIAttackComponent") or {}
-    local attack_table = get_attack_table(entity, ai, attacks)
+function get_attack_ranged_pos(entity, attack_table)
     local x, y, rotation, scale_x, scale_y = EntityGetTransform(entity)
     local pos_x, pos_y = attack_table.offset_x, attack_table.offset_y
     pos_x, pos_y = vec_rotate(pos_x, pos_y, rotation)
@@ -150,10 +148,7 @@ function get_attack_ranged_pos(entity)
     return pos_x, pos_y
 end
 
-function entity_shoot(shooter)
-    local ai = EntityGetFirstComponentIncludingDisabled(shooter, "AnimalAIComponent")
-    local attacks = EntityGetComponent(shooter, "AIAttackComponent") or {}
-    local attack_table = get_attack_table(shooter, ai, attacks)
+function entity_shoot(shooter, attack_table)
     local controls = EntityGetFirstComponent(shooter, "ControlsComponent")
     if controls ~= nil then
         local x, y = get_attack_ranged_pos(shooter)
@@ -258,8 +253,12 @@ end
 
 function table.find(list, pred)
     for i, v in ipairs(list) do
-        if pred(v) then
-            return i, v
+        if type(pred) == "function" then
+            if pred(v) then
+                return v, i
+            end
+        elseif v == pred then
+            return v, i
         end
     end
 end
@@ -409,16 +408,24 @@ function EntityAccessor(tag, pred)
     }
 end
 
-local pack_metatable = {
+local field_metatable = {
     __call = function(t)
-        return unpack(t)
+        return ComponentGetValue2(t.id, t.name)
+    end,
+    __index = function(t, k)
+        return select(k, ComponentGetValue2(t.id, t.name))
+    end,
+    __newindex = function(t, k, v)
+        local values = { ComponentGetValue2(t.id, t.name) }
+        values[k] = v
+        ComponentSetValue2(t.id, t.name, unpack(values))
     end,
 }
 local component_metatable = {
     __index = function(t, k)
         local v = { ComponentGetValue2(t._id, k) }
         if #v > 1 then
-            return setmetatable(v, pack_metatable)
+            return setmetatable({ id = t._id, name = k }, field_metatable)
         else
             return v[1]
         end
@@ -443,6 +450,17 @@ function ComponentAccessor(f, ...)
         end
     end
     return self
+end
+
+function ComponentValidAccessor(component_type_name, table_of_component_values)
+    return {
+        get = function(t, k)
+            local component = EntityGetFirstComponentIncludingDisabled(t.id, component_type_name, table_of_component_values._tags) or EntityAddComponent2(t.id, component_type_name, table_of_component_values)
+            local v = setmetatable({ _id = component }, component_metatable)
+            rawset(t, k, v)
+            return v
+        end,
+    }
 end
 
 function VariableAccessor(tag, field, default)
