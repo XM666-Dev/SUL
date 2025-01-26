@@ -82,7 +82,13 @@ function read_input_up(input)
     end
 end
 
+local mouse_button_texts = {
+    x1 = "button4",
+    x2 = "button5",
+}
 local key_texts = {
+    TAB = "$input_tab",
+    SPACE = "$input_space",
     MINUS = "-",
     EQUALS = "=",
     LEFTBRACKET = "[",
@@ -96,128 +102,86 @@ local key_texts = {
     PERIOD = ".",
     SLASH = "/",
     NUMLOCKCLEAR = "NUMLOCK",
-    KP_DIVIDE = "/",
-    KP_MULTIPLY = "*",
-    KP_MINUS = "-",
-    KP_PLUS = "+",
-    KP_PERIOD = ".",
+    DIVIDE = "/",
+    MULTIPLY = "*",
+    PLUS = "+",
     NONUSBACKSLASH = "\\",
     APPLICATION = "MENU",
     POWER = "SHUTDOWN",
-    KP_EQUALS = "=",
-    KP_COMMA = ",",
-    KP_EQUALSAS400 = "=",
-    KP_LEFTPAREN = "(",
-    KP_RIGHTPAREN = ")",
-    KP_LEFTBRACE = "{",
-    KP_RIGHTBRACE = "}",
-    KP_XOR = "^",
-    KP_POWER = "SHUTDOWN",
-    KP_PERCENT = "%",
-    KP_LESS = "<",
-    KP_GREATER = ">",
-    KP_AMPERSAND = "&",
-    KP_DBLAMPERSAND = "&&",
-    KP_VERTICALBAR = "|",
-    KP_DBLVERTICALBAR = "||",
-    KP_COLON = ":",
-    KP_HASH = "#",
-    KP_AT = "@",
-    KP_EXCLAM = "!",
-    KP_PLUSMINUS = "+-",
+    EQUALSAS400 = "=",
+    LEFTPAREN = "(",
+    RIGHTPAREN = ")",
+    LEFTBRACE = "{",
+    RIGHTBRACE = "}",
+    XOR = "^",
+    PERCENT = "%",
+    LESS = "<",
+    GREATER = ">",
+    AMPERSAND = "&",
+    DBLAMPERSAND = "&&",
+    VERTICALBAR = "|",
+    DBLVERTICALBAR = "||",
+    COLON = ":",
+    HASH = "#",
+    AT = "@",
+    EXCLAM = "!",
+    PLUSMINUS = "+-",
     LCTRL = "LEFT CTRL",
-    LSHIFT = "LEFT SHIFT",
+    LSHIFT = "$input_leftshift",
     LALT = "LEFT ALT",
     LGUI = "LEFT WINDOWS",
     RCTRL = "RIGHT CTRL",
-    RSHIFT = "RIGHT SHIFT",
+    RSHIFT = "$input_rightshift",
     RALT = "RIGHT ALT",
     RGUI = "RIGHT WINDOWS",
 }
 local joy_button_texts = {
-    JOY_BUTTON_ANALOG_00_MOVED = "$input_xboxbutton_analog_00",
-    JOY_BUTTON_ANALOG_01_MOVED = "$input_xboxbutton_analog_01",
-    JOY_BUTTON_ANALOG_02_MOVED = "$input_xboxbutton_analog_02",
-    JOY_BUTTON_ANALOG_03_MOVED = "$input_xboxbutton_analog_03",
-    JOY_BUTTON_ANALOG_04_MOVED = "$input_xboxbutton_analog_04",
-    JOY_BUTTON_ANALOG_05_MOVED = "$input_xboxbutton_analog_05",
-    JOY_BUTTON_ANALOG_06_MOVED = "$input_xboxbutton_analog_06",
-    JOY_BUTTON_ANALOG_07_MOVED = "$input_xboxbutton_analog_07",
-    JOY_BUTTON_ANALOG_08_MOVED = "$input_xboxbutton_analog_08",
-    JOY_BUTTON_ANALOG_09_MOVED = "$input_xboxbutton_analog_09",
-    JOY_BUTTON_DPAD_UP = "$input_xboxbutton_dpad_up",
-    JOY_BUTTON_DPAD_DOWN = "$input_xboxbutton_dpad_down",
-    JOY_BUTTON_DPAD_LEFT = "$input_xboxbutton_dpad_left",
-    JOY_BUTTON_DPAD_RIGHT = "$input_xboxbutton_dpad_right",
-    JOY_BUTTON_START = "$input_xboxbutton_start",
-    JOY_BUTTON_BACK = "$input_xboxbutton_select",
-    JOY_BUTTON_LEFT_THUMB = "$input_xboxbutton_left_thumb",
-    JOY_BUTTON_RIGHT_THUMB = "$input_xboxbutton_right_thumb",
-    JOY_BUTTON_LEFT_SHOULDER = "$input_xboxbutton_left_shoulder",
-    JOY_BUTTON_RIGHT_SHOULDER = "$input_xboxbutton_right_shoulder",
-    JOY_BUTTON_LEFT_STICK_MOVED = "$input_xboxbutton_left_stick_moved",
-    JOY_BUTTON_RIGHT_STICK_MOVED = "$input_xboxbutton_right_stick_moved",
-    JOY_BUTTON_0 = "$input_xboxbutton_a",
-    JOY_BUTTON_1 = "$input_xboxbutton_b",
-    JOY_BUTTON_2 = "$input_xboxbutton_x",
-    JOY_BUTTON_3 = "$input_xboxbutton_y",
-    JOY_BUTTON_4 = "$input_xboxbutton_4",
-    JOY_BUTTON_5 = "$input_xboxbutton_5",
-    JOY_BUTTON_6 = "$input_xboxbutton_6",
-    JOY_BUTTON_7 = "$input_xboxbutton_7",
-    JOY_BUTTON_8 = "$input_xboxbutton_8",
-    JOY_BUTTON_9 = "$input_xboxbutton_9",
-    JOY_BUTTON_10 = "$input_xboxbutton_10",
-    JOY_BUTTON_11 = "$input_xboxbutton_11",
-    JOY_BUTTON_12 = "$input_xboxbutton_12",
-    JOY_BUTTON_13 = "$input_xboxbutton_13",
-    JOY_BUTTON_14 = "$input_xboxbutton_14",
-    JOY_BUTTON_15 = "$input_xboxbutton_15",
-    JOY_BUTTON_LEFT_STICK_LEFT = "$input_xboxbutton_left_stick_left",
-    JOY_BUTTON_LEFT_STICK_RIGHT = "$input_xboxbutton_left_stick_right",
-    JOY_BUTTON_LEFT_STICK_UP = "$input_xboxbutton_left_stick_up",
-    JOY_BUTTON_LEFT_STICK_DOWN = "$input_xboxbutton_left_stick_down",
-    JOY_BUTTON_RIGHT_STICK_LEFT = "$input_xboxbutton_right_stick_left",
-    JOY_BUTTON_RIGHT_STICK_RIGHT = "$input_xboxbutton_right_stick_right",
-    JOY_BUTTON_RIGHT_STICK_UP = "$input_xboxbutton_right_stick_up",
-    JOY_BUTTON_RIGHT_STICK_DOWN = "$input_xboxbutton_right_stick_down",
-    JOY_BUTTON_ANALOG_00_DOWN = "$input_xboxbutton_analog_00",
-    JOY_BUTTON_ANALOG_01_DOWN = "$input_xboxbutton_analog_01",
-    JOY_BUTTON_ANALOG_02_DOWN = "$input_xboxbutton_analog_02",
-    JOY_BUTTON_ANALOG_03_DOWN = "$input_xboxbutton_analog_03",
-    JOY_BUTTON_ANALOG_04_DOWN = "$input_xboxbutton_analog_04",
-    JOY_BUTTON_ANALOG_05_DOWN = "$input_xboxbutton_analog_05",
-    JOY_BUTTON_ANALOG_06_DOWN = "$input_xboxbutton_analog_06",
-    JOY_BUTTON_ANALOG_07_DOWN = "$input_xboxbutton_analog_07",
-    JOY_BUTTON_ANALOG_08_DOWN = "$input_xboxbutton_analog_08",
-    JOY_BUTTON_ANALOG_09_DOWN = "$input_xboxbutton_analog_09",
-    JOY_BUTTON_A = "$input_xboxbutton_a",
-    JOY_BUTTON_B = "$input_xboxbutton_b",
-    JOY_BUTTON_X = "$input_xboxbutton_x",
-    JOY_BUTTON_Y = "$input_xboxbutton_y",
+    ANALOG_00_MOVED = "analog_00",
+    ANALOG_01_MOVED = "analog_01",
+    ANALOG_02_MOVED = "analog_02",
+    ANALOG_03_MOVED = "analog_03",
+    ANALOG_04_MOVED = "analog_04",
+    ANALOG_05_MOVED = "analog_05",
+    ANALOG_06_MOVED = "analog_06",
+    ANALOG_07_MOVED = "analog_07",
+    ANALOG_08_MOVED = "analog_08",
+    ANALOG_09_MOVED = "analog_09",
+    ["0"] = "a",
+    ["1"] = "b",
+    ["2"] = "x",
+    ["3"] = "y",
+    ANALOG_00_DOWN = "analog_00",
+    ANALOG_01_DOWN = "analog_01",
+    ANALOG_02_DOWN = "analog_02",
+    ANALOG_03_DOWN = "analog_03",
+    ANALOG_04_DOWN = "analog_04",
+    ANALOG_05_DOWN = "analog_05",
+    ANALOG_06_DOWN = "analog_06",
+    ANALOG_07_DOWN = "analog_07",
+    ANALOG_08_DOWN = "analog_08",
+    ANALOG_09_DOWN = "analog_09",
 }
 ---@param input string
 ---@return string?
 function get_input_text(input)
     if input:find("^Mouse_") then
-        return GameTextGet("$input_" .. input:gsub("_", ""):lower()):upper()
+        local s = input:sub(7)
+        return GameTextGet("$input_mouse" .. (mouse_button_texts[s] or s:gsub("_", ""))):upper()
     elseif input:find("^Key_") then
-        local text = input:sub(5)
-        local prefix = ""
-        local key_text = key_texts[text]
-        if text:find("^KP_") then
-            text = text:sub(4)
-            prefix = "KEYPAD "
-        elseif text:find("^AC_") then
-            text = text:sub(4)
-            prefix = "AC "
+        local s = input:sub(5)
+        local text = ""
+        if s:find("^KP_") then
+            s = s:sub(4)
+            text = "KEYPAD "
+        elseif s:find("^AC_") then
+            s = s:sub(4)
+            text = "AC "
         end
-        if key_text ~= nil then
-            text = key_text
-        end
-        return prefix .. text:upper()
+        text = text .. (key_texts[s] or s)
+        return (text:find("^%$") and GameTextGet(text) or text):upper()
     elseif input:find("^JOY_BUTTON_") then
-        return GameTextGet(joy_button_texts[input]):upper()
+        local s = input:sub(12)
+        return GameTextGet("$input_xboxbutton_" .. (joy_button_texts[s] or s:lower())):upper()
     end
 end
 
