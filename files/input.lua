@@ -2,7 +2,10 @@ local mouse_buttons = {}
 local keys = {}
 local joy_buttons = {}
 local keycodes = {}
-setfenv(loadfile("data/scripts/debug/keycodes.lua"), keycodes)()
+local f = loadfile("data/scripts/debug/keycodes.lua")
+if f ~= nil then
+    setfenv(f, keycodes)()
+end
 for k, v in pairs(keycodes) do
     if k:find("^Mouse_") then
         mouse_buttons[k] = v
