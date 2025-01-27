@@ -1,36 +1,20 @@
-local mouse_buttons = {}
-local keys = {}
-local joy_buttons = {}
 local keycodes = {}
 local f = loadfile("data/scripts/debug/keycodes.lua")
 if f ~= nil then
     setfenv(f, keycodes)()
 end
-for k, v in pairs(keycodes) do
-    if k:find("^Mouse_") then
-        mouse_buttons[k] = v
-    elseif k:find("^Key_") then
-        keys[k] = v
-    elseif k:find("^JOY_BUTTON_") then
-        joy_buttons[k] = v
-    end
-end
 
 ---@return string? input
 function get_any_input()
-    for k, v in pairs(mouse_buttons) do
-        if InputIsMouseButtonJustDown(v) then
+    for k, v in pairs(keycodes) do
+        if k:find("^Mouse_") and InputIsMouseButtonJustDown(v) then
             return k
         end
-    end
-    for k, v in pairs(keys) do
-        if InputIsKeyJustDown(v) then
+        if k:find("^Key_") and InputIsKeyJustDown(v) then
             return k
         end
-    end
-    for k, v in pairs(joy_buttons) do
         for i = 0, 3 do
-            if InputIsJoystickButtonJustDown(i, v) then
+            if k:find("^JOY_BUTTON_") and InputIsJoystickButtonJustDown(i, v) then
                 return k
             end
         end
@@ -40,12 +24,12 @@ end
 ---@param input string
 function read_input(input)
     if input:find("^Mouse_") then
-        return InputIsMouseButtonDown(mouse_buttons[input])
+        return InputIsMouseButtonDown(keycodes[input])
     elseif input:find("^Key_") then
-        return InputIsKeyDown(keys[input])
+        return InputIsKeyDown(keycodes[input])
     elseif input:find("^JOY_BUTTON_") then
         for i = 0, 3 do
-            if InputIsJoystickButtonDown(i, joy_buttons[input]) then
+            if InputIsJoystickButtonDown(i, keycodes[input]) then
                 return true
             end
         end
@@ -56,12 +40,12 @@ end
 ---@param input string
 function read_input_down(input)
     if input:find("^Mouse_") then
-        return InputIsMouseButtonJustDown(mouse_buttons[input])
+        return InputIsMouseButtonJustDown(keycodes[input])
     elseif input:find("^Key_") then
-        return InputIsKeyJustDown(keys[input])
+        return InputIsKeyJustDown(keycodes[input])
     elseif input:find("^JOY_BUTTON_") then
         for i = 0, 3 do
-            if InputIsJoystickButtonJustDown(i, joy_buttons[input]) then
+            if InputIsJoystickButtonJustDown(i, keycodes[input]) then
                 return true
             end
         end
@@ -72,12 +56,12 @@ end
 ---@param input string
 function read_input_up(input)
     if input:find("^Mouse_") then
-        return InputIsMouseButtonJustUp(mouse_buttons[input])
+        return InputIsMouseButtonJustUp(keycodes[input])
     elseif input:find("^Key_") then
-        return InputIsKeyJustUp(keys[input])
+        return InputIsKeyJustUp(keycodes[input])
     elseif input:find("^JOY_BUTTON_") then
         for i = 0, 3 do
-            if InputIsJoystickButtonDown(i, joy_buttons[input]) then
+            if InputIsJoystickButtonDown(i, keycodes[input]) then
                 return false
             end
         end
@@ -379,11 +363,9 @@ function get_input_name(input)
         if name:find("^%$") then
             name = GameTextGet(name)
         end
-        name = name:upper()
-    else
-        name = "$menuoptions_configurecontrols_keyname_unknown"
+        return name:upper()
     end
-    return name
+    return "$menuoptions_configurecontrols_keyname_unknown"
 end
 
 local detect_key = false
