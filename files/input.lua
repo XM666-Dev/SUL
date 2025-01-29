@@ -1,21 +1,22 @@
 local keycodes = {}
-local f = loadfile("data/scripts/debug/keycodes.lua")
-if f ~= nil then
-    setfenv(f, keycodes)()
-end
+setfenv(loadfile("data/scripts/debug/keycodes.lua"), keycodes)()
 
 ---@return string? input
 function get_any_input()
     for k, v in pairs(keycodes) do
-        if k:find("^Mouse_") and InputIsMouseButtonJustDown(v) then
-            return k
-        end
-        if k:find("^Key_") and InputIsKeyJustDown(v) then
-            return k
-        end
-        for i = 0, 3 do
-            if k:find("^JOY_BUTTON_") and InputIsJoystickButtonJustDown(i, v) then
+        if k:find("^Mouse_") then
+            if InputIsMouseButtonJustDown(v) then
                 return k
+            end
+        elseif k:find("^Key_") then
+            if InputIsKeyJustDown(v) then
+                return k
+            end
+        elseif k:find("^JOY_BUTTON_") then
+            for i = 0, 3 do
+                if InputIsJoystickButtonJustDown(i, v) then
+                    return k
+                end
             end
         end
     end
@@ -173,7 +174,7 @@ local names = {
     Key_KP_9                     = "Keypad 9",
     Key_KP_0                     = "Keypad 0",
     Key_KP_PERIOD                = "Keypad .",
-    Key_APPLICATION              = "Application",
+    Key_APPLICATION              = "Menu",
     Key_POWER                    = "Power",
     Key_KP_EQUALS                = "Keypad =",
     Key_F13                      = "F13",
@@ -265,11 +266,11 @@ local names = {
     Key_LCTRL                    = "Left Ctrl",
     Key_LSHIFT                   = "$input_leftshift",
     Key_LALT                     = "Left Alt",
-    Key_LGUI                     = "Left GUI",
+    Key_LGUI                     = "Left Windows",
     Key_RCTRL                    = "Right Ctrl",
     Key_RSHIFT                   = "$input_rightshift",
     Key_RALT                     = "Right Alt",
-    Key_RGUI                     = "Right GUI",
+    Key_RGUI                     = "Right Windows",
     Key_MODE                     = "ModeSwitch",
     Key_AUDIONEXT                = "AudioNext",
     Key_AUDIOPREV                = "AudioPrev",
@@ -356,7 +357,7 @@ local names = {
     JOY_BUTTON_ANALOG_09_DOWN    = "$input_xboxbutton_analog_09",
 }
 ---@param input string
----@return string?
+---@return string
 function get_input_name(input)
     local name = names[input]
     if name ~= nil then
@@ -371,8 +372,8 @@ end
 local detect_key = false
 local disable_button = false
 function mod_setting_input(mod_id, gui, in_main_menu, im_id, setting)
-    GuiColorSetForNextWidget(gui, 0.436, 0.435, 0.435, 1)
     GuiOptionsAddForNextWidget(gui, GUI_OPTION.Layout_NextSameLine)
+    GuiColorSetForNextWidget(gui, 0x6e / 0xff, 0x6e / 0xff, 0x6e / 0xff, 1)
     GuiText(gui, mod_setting_group_x_offset, 0, setting.ui_name)
 
     local text
@@ -394,7 +395,7 @@ function mod_setting_input(mod_id, gui, in_main_menu, im_id, setting)
         GuiOptionsAddForNextWidget(gui, GUI_OPTION.NonInteractive)
         GuiOptionsAddForNextWidget(gui, GUI_OPTION.ForceFocusable)
     end
-    local clicked, right_clicked = GuiButton(gui, im_id, mod_setting_group_x_offset + GuiGetTextDimensions(gui, setting.ui_name) + 10, 0, text or "?")
+    local clicked, right_clicked = GuiButton(gui, im_id, mod_setting_group_x_offset + GuiGetTextDimensions(gui, setting.ui_name) + 10, 0, text)
     if clicked then
         detect_key = true
     elseif right_clicked then

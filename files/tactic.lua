@@ -177,7 +177,7 @@ function serialize(v)
     elseif type == "string" then
         return ("%q"):format(v)
     elseif type == "table" then
-        local t = { "{" }
+        local t = {"{"}
         for k, v in pairs(v) do
             table.insert(t, ("[%s]=%s,"):format(serialize(k), serialize(v)))
         end
@@ -211,7 +211,7 @@ function get_language()
 end
 
 function debug_print(...)
-    local t = { ... }
+    local t = {...}
     for i, v in ipairs(t) do
         t[i] = string.from(v)
     end
@@ -241,7 +241,7 @@ end
 
 function string.raw(s)
     local bytes = {}
-    local t = { s:byte(1, #s) }
+    local t = {s:byte(1, #s)}
     for i, v in ipairs(t) do
         if v < 48 or v > 57 and v < 65 or v > 90 and v < 97 or v > 122 then
             table.insert(bytes, 37)
@@ -330,9 +330,9 @@ function Matrix(x, y, rotation, scale_x, scale_y)
     local cos_r = math.cos(rotation)
     local sin_r = math.sin(rotation)
     return {
-        { scale_x * cos_r, -scale_y * sin_r, x },
-        { scale_x * sin_r, scale_y * cos_r,  y },
-        { 0,               0,                1 },
+        {scale_x * cos_r, -scale_y * sin_r, x},
+        {scale_x * sin_r, scale_y * cos_r,  y},
+        {0,               0,                1},
     }
 end
 
@@ -382,6 +382,142 @@ function Class(accessors)
     }
 end
 
+local ensurer = setmetatable({}, {__newindex = function() end})
+function ensure(t)
+    if t ~= nil then
+        return t
+    end
+    return ensurer
+end
+
+local function __index(t, k)
+    local field = getmetatable(t)[k]
+    assert(field ~= nil, "field does not exist: " .. k)
+    if type(field) == "table" then
+        return field:get(t, k)
+    end
+    return field
+end
+local function __newindex(t, k, v)
+    local field = getmetatable(t)[k]
+    assert(field ~= nil, "field does not exist: " .. k)
+    field:set(t, k, v)
+end
+---@class Entity
+---@type table|fun(fields: table): Entity
+Entity = setmetatable({
+    __call = function(t, entity_id)
+        return setmetatable({id = entity_id}, t)
+    end,
+}, {
+    __call = function(t, fields)
+        fields.__index = __index
+        fields.__newindex = __newindex
+        return setmetatable(fields, t)
+    end,
+})
+
+local vector_metatable = {
+    __call = function(t)
+        return ComponentGetValue2(t.id, t.name)
+    end,
+    __index = function(t, k)
+        return select(k, ComponentGetValue2(t.id, t.name))
+    end,
+    __newindex = function(t, k, v)
+        local values = {ComponentGetValue2(t.id, t.name)}
+        values[k] = v
+        ComponentSetValue2(t.id, t.name, unpack(values))
+    end,
+}
+local component_metatable = {
+    __index = function(t, k)
+        local id = rawget(t, "_id")
+        if id ~= nil then
+            local v = {ComponentGetValue2(id, k)}
+            if #v > 1 then
+                return setmetatable({id = id, name = k}, vector_metatable)
+            end
+            return v[1]
+        end
+    end,
+    __newindex = function(t, k, v)
+        local id = rawget(t, "_id")
+        if id ~= nil and v ~= nil then
+            if type(v) == "table" then
+                ComponentSetValue2(id, k, unpack(v))
+                return
+            end
+            ComponentSetValue2(id, k, v)
+        end
+    end,
+}
+local function EntityGetFirstComponentWithTable(entity_id, t)
+    local f
+    for i, v in ipairs(t) do
+        f = v
+    end
+    if type(f) ~= "function" then
+        f = EntityGetFirstComponent
+    end
+    local component = f(entity_id, unpack(t))
+    if component ~= nil then
+        return component
+    end
+    local values = {}
+    for k, v in pairs(t) do
+        if type(k) == "string" then
+            values[k] = v
+        end
+    end
+    return EntityAddComponent2(entity_id, t[1], values)
+end
+---@class ComponentField
+---@type table|fun(component_type_name: string|table, tag: string|function?): ComponentField
+ComponentField = setmetatable({}, {
+    __call = function(t, ...)
+        local f = select(select("#", ...), ...)
+        if type(...) == "table" then
+            f = EntityGetFirstComponentWithTable
+        elseif type(f) ~= "function" then
+            f = EntityGetFirstComponent
+        end
+        return setmetatable({f, ...}, t)
+    end,
+})
+ComponentField.__index = ComponentField
+function ComponentField:get(entity, k)
+    local component = setmetatable({_id = self[1](entity.id, unpack(self, 2))}, component_metatable)
+    rawset(entity, k, component)
+    return component
+end
+
+---@class VariableField
+---@type table|fun(tag: string, field: "value_string"|"value_int"|"value_bool"|"value_float", default?: string|integer|boolean|number): VariableField
+VariableField = setmetatable({}, {
+    __call = function(t, tag, field, default)
+        return setmetatable({tag = tag, field = field, default = default}, t)
+    end,
+})
+VariableField.__index = VariableField
+function VariableField:get(entity, k)
+    local component = EntityGetFirstComponentIncludingDisabled(entity.id, "VariableStorageComponent", self.tag)
+    if component ~= nil then
+        return ComponentGetValue2(component, self.field)
+    end
+    EntityAddComponent2(entity.id, "VariableStorageComponent", {_tags = self.tag, [self.field] = self.default})
+    return self.default
+end
+
+function VariableField:set(entity, k, v)
+    local component = EntityGetFirstComponentIncludingDisabled(entity.id, "VariableStorageComponent", self.tag)
+    if component ~= nil then
+        ComponentSetValue2(component, self.field, v)
+        return
+    end
+    EntityAddComponent2(entity.id, "VariableStorageComponent", {_tags = self.tag, [self.field] = v})
+end
+
 function Table(t, getters, setters)
     return setmetatable(t, {
         __index = function(t, k)
@@ -408,43 +544,13 @@ function EntityAccessor(tag, pred)
     }
 end
 
-local field_metatable = {
-    __call = function(t)
-        return ComponentGetValue2(t.id, t.name)
-    end,
-    __index = function(t, k)
-        return select(k, ComponentGetValue2(t.id, t.name))
-    end,
-    __newindex = function(t, k, v)
-        local values = { ComponentGetValue2(t.id, t.name) }
-        values[k] = v
-        ComponentSetValue2(t.id, t.name, unpack(values))
-    end,
-}
-local component_metatable = {
-    __index = function(t, k)
-        local v = { ComponentGetValue2(t._id, k) }
-        if #v > 1 then
-            return setmetatable({ id = t._id, name = k }, field_metatable)
-        else
-            return v[1]
-        end
-    end,
-    __newindex = function(t, k, v)
-        if type(v) == "table" then
-            ComponentSetValue2(t._id, k, unpack(v))
-        else
-            ComponentSetValue2(t._id, k, v)
-        end
-    end,
-}
 function ComponentAccessor(f, ...)
-    local args = { ... }
+    local args = {...}
     local self = {}
     self.get = function(t, k)
         local component = f(t.id, unpack(args))
         if component ~= nil then
-            local v = setmetatable({ _id = component }, component_metatable)
+            local v = setmetatable({_id = component}, component_metatable)
             rawset(t, k, v)
             return v
         end
@@ -456,7 +562,7 @@ function ComponentValidAccessor(component_type_name, table_of_component_values)
     return {
         get = function(t, k)
             local component = EntityGetFirstComponentIncludingDisabled(t.id, component_type_name, table_of_component_values._tags) or EntityAddComponent2(t.id, component_type_name, table_of_component_values)
-            local v = setmetatable({ _id = component }, component_metatable)
+            local v = setmetatable({_id = component}, component_metatable)
             rawset(t, k, v)
             return v
         end,
@@ -470,7 +576,7 @@ function VariableAccessor(tag, field, default)
         if component == nil then
             local entity = t.id
             if t.id == 0 then return end
-            component = EntityGetFirstComponent(entity, "VariableStorageComponent", tag) or EntityAddComponent2(entity, "VariableStorageComponent", { _tags = tag, [field] = default })
+            component = EntityGetFirstComponent(entity, "VariableStorageComponent", tag) or EntityAddComponent2(entity, "VariableStorageComponent", {_tags = tag, [field] = default})
             rawset(t, self, component)
         end
         return ComponentGetValue2(component, field)
@@ -480,7 +586,7 @@ function VariableAccessor(tag, field, default)
         if component == nil then
             local entity = t.id
             if t.id == 0 then return end
-            component = EntityGetFirstComponent(entity, "VariableStorageComponent", tag) or EntityAddComponent2(entity, "VariableStorageComponent", { _tags = tag, [field] = default })
+            component = EntityGetFirstComponent(entity, "VariableStorageComponent", tag) or EntityAddComponent2(entity, "VariableStorageComponent", {_tags = tag, [field] = default})
             rawset(t, self, component)
         end
         ComponentSetValue2(component, field, v)
@@ -489,7 +595,7 @@ function VariableAccessor(tag, field, default)
 end
 
 function ConstantAccessor(value)
-    return { get = function() return value end }
+    return {get = function() return value end}
 end
 
 function SerializedAccessor(accessor, filename, value_date_filename, file_date_filename)
