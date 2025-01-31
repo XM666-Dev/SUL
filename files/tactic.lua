@@ -382,12 +382,33 @@ function Class(accessors)
     }
 end
 
-local ensurer = setmetatable({}, {__newindex = function() end})
-function ensure(t)
-    if t ~= nil then
-        return t
+local metatable
+if require ~= nil then
+    metatable = {}
+    debug.setmetatable(nil, metatable)
+else
+    null = newproxy(true)
+    metatable = getmetatable(null)
+end
+local f = function() return null end
+--metatable.__tostring = function() return "null" end
+--metatable.__add = f
+--metatable.__sub = f
+--metatable.__mul = f
+--metatable.__div = f
+--metatable.__mod = f
+--metatable.__pow = f
+---metatable.__unm = f
+--metatable.__concat = f
+metatable.__len = function() return nil end
+metatable.__index = f
+metatable.__newindex = f
+--metatable.__call = f
+function with(...)
+    if ... ~= null then
+        return ...
     end
-    return ensurer
+    return nil
 end
 
 local function __index(t, k)
@@ -404,7 +425,8 @@ local function __newindex(t, k, v)
     field:set(t, k, v)
 end
 ---@class Entity
----@type table|fun(fields: table): Entity
+---@field id integer
+---@type table|fun(fields: table): fun(entity_id: integer): Entity
 Entity = setmetatable({
     __call = function(t, entity_id)
         return setmetatable({id = entity_id}, t)
@@ -418,37 +440,33 @@ Entity = setmetatable({
 })
 
 local vector_metatable = {
-    __call = function(t)
-        return ComponentGetValue2(t.id, t.name)
+    __call = function(self)
+        return ComponentGetValue2(self.id, self.field)
     end,
-    __index = function(t, k)
-        return select(k, ComponentGetValue2(t.id, t.name))
+    __index = function(self, k)
+        return select(k, ComponentGetValue2(self.id, self.field))
     end,
-    __newindex = function(t, k, v)
-        local values = {ComponentGetValue2(t.id, t.name)}
+    __newindex = function(self, k, v)
+        local values = {ComponentGetValue2(self.id, self.field)}
         values[k] = v
-        ComponentSetValue2(t.id, t.name, unpack(values))
+        ComponentSetValue2(self.id, self.field, unpack(values))
     end,
 }
 local component_metatable = {
-    __index = function(t, k)
-        local id = rawget(t, "_id")
-        if id ~= nil then
-            local v = {ComponentGetValue2(id, k)}
-            if #v > 1 then
-                return setmetatable({id = id, name = k}, vector_metatable)
-            end
-            return v[1]
+    __index = function(self, k)
+        local v = {ComponentGetValue2(self._id, k)}
+        if #v > 1 then
+            return setmetatable({id = self._id, field = k}, vector_metatable)
         end
+        return v[1]
     end,
-    __newindex = function(t, k, v)
-        local id = rawget(t, "_id")
-        if id ~= nil and v ~= nil then
+    __newindex = function(self, k, v)
+        if v ~= nil then
             if type(v) == "table" then
-                ComponentSetValue2(id, k, unpack(v))
+                ComponentSetValue2(self._id, k, unpack(v))
                 return
             end
-            ComponentSetValue2(id, k, v)
+            ComponentSetValue2(self._id, k, v)
         end
     end,
 }
@@ -487,9 +505,13 @@ ComponentField = setmetatable({}, {
 })
 ComponentField.__index = ComponentField
 function ComponentField:get(entity, k)
-    local component = setmetatable({_id = self[1](entity.id, unpack(self, 2))}, component_metatable)
-    rawset(entity, k, component)
-    return component
+    local id = self[1](entity.id, unpack(self, 2))
+    if id ~= nil then
+        local v = setmetatable({_id = id}, component_metatable)
+        rawset(entity, k, v)
+        return v
+    end
+    return null
 end
 
 ---@class VariableField
