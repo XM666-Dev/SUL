@@ -92,7 +92,7 @@ function get_last_component(components)
     return index, components[index]
 end
 
-function get_attack_table(entity, ai, attacks)
+function get_attack_info(entity, ai, attacks)
     local animation_name = "attack_ranged"
     local frames_between
     local action_frame
@@ -139,23 +139,13 @@ function get_attack_table(entity, ai, attacks)
     }
 end
 
-function get_attack_ranged_pos(entity, attack_table)
+function get_attack_ranged_pos(entity, attack_info)
     local x, y, rotation, scale_x, scale_y = EntityGetTransform(entity)
-    local pos_x, pos_y = attack_table.offset_x, attack_table.offset_y
+    local pos_x, pos_y = attack_info.offset_x, attack_info.offset_y
     pos_x, pos_y = vec_rotate(pos_x, pos_y, rotation)
     pos_x, pos_y = vec_scale(pos_x, pos_y, scale_x, scale_y)
     pos_x, pos_y = vec_add(pos_x, pos_y, x, y)
     return pos_x, pos_y
-end
-
-function entity_shoot(shooter, attack_table)
-    local controls = EntityGetFirstComponent(shooter, "ControlsComponent")
-    if controls ~= nil then
-        local x, y = get_attack_ranged_pos(shooter)
-        local aiming_vector_x, aiming_vector_y = ComponentGetValue2(controls, "mAimingVector")
-        local projectile_entity = EntityLoad(attack_table.entity_file, x, y)
-        GameShootProjectile(shooter, x, y, x + aiming_vector_x, y + aiming_vector_y, projectile_entity)
-    end
 end
 
 local ids = {}
@@ -326,96 +316,23 @@ function point_in_rectangle(x, y, left, up, right, down)
     return x >= left and x <= right and y >= up and y <= down
 end
 
-function Matrix(x, y, rotation, scale_x, scale_y)
-    local cos_r = math.cos(rotation)
-    local sin_r = math.sin(rotation)
-    return {
-        {scale_x * cos_r, -scale_y * sin_r, x},
-        {scale_x * sin_r, scale_y * cos_r,  y},
-        {0,               0,                1},
-    }
-end
-
-function matrix_mult(m1, m2)
-    local result = {}
-    for i = 1, 3 do
-        result[i] = {}
-        for j = 1, 3 do
-            result[i][j] = m1[i][1] * m2[1][j] + m1[i][2] * m2[2][j] + m1[i][3] * m2[3][j]
-        end
-    end
-    return result
-end
-
-function matrix_to_transform(matrix)
-    local scale_x = math.sqrt(matrix[1][1] ^ 2 + matrix[2][1] ^ 2)
-    local scale_y = math.sqrt(matrix[1][2] ^ 2 + matrix[2][2] ^ 2)
-    local rotation = math.atan2(matrix[2][1], matrix[1][1])
-    local x = matrix[1][3]
-    local y = matrix[2][3]
-    return x, y, rotation, scale_x, scale_y
-end
-
-function transform_mult(x1, y1, rotation1, scale_x1, scale_y1, x2, y2, rotation2, scale_x2, scale_y2)
-    local matrix1 = Matrix(x1, y1, rotation1, scale_x1, scale_y1)
-    local matrix2 = Matrix(x2, y2, rotation2, scale_x2, scale_y2)
-    local matrix3 = matrix_mult(matrix1, matrix2)
-    return matrix_to_transform(matrix3)
-end
-
 --#endregion
 
-function Class(accessors)
-    local getters = {}
-    local setters = {}
-    for k, accessor in pairs(accessors) do
-        getters[k] = accessor.get
-        setters[k] = accessor.set
-    end
-    return {
-        __index = function(t, k)
-            return getters[k](t, k)
-        end,
-        __newindex = function(t, k, v)
-            setters[k](t, k, v)
-        end,
-    }
-end
-
-local metatable
-if require ~= nil then
-    metatable = {}
-    debug.setmetatable(nil, metatable)
-else
-    null = newproxy(true)
-    metatable = getmetatable(null)
-end
-local f = function() return null end
---metatable.__tostring = function() return "null" end
---metatable.__add = f
---metatable.__sub = f
---metatable.__mul = f
---metatable.__div = f
---metatable.__mod = f
---metatable.__pow = f
----metatable.__unm = f
---metatable.__concat = f
-metatable.__len = function() return nil end
-metatable.__index = f
-metatable.__newindex = f
---metatable.__call = f
-function with(...)
-    if ... ~= null then
-        return ...
-    end
-    return nil
-end
-
+local null = setmetatable({}, {__index = function(t) return t end, __newindex = function() end})
 local function __index(t, k)
+    local conditional = false
+    if k:find("_$") then
+        k = k:sub(1, -2)
+        conditional = true
+    end
     local field = getmetatable(t)[k]
     assert(field ~= nil, "field does not exist: " .. k)
     if type(field) == "table" then
-        return field:get(t, k)
+        local v = field:get(t, k)
+        if v == nil and conditional then
+            return null
+        end
+        return v
     end
     return field
 end
@@ -463,6 +380,10 @@ local component_metatable = {
     __newindex = function(self, k, v)
         if v ~= nil then
             if type(v) == "table" then
+                if getmetatable(v) == vector_metatable then
+                    ComponentSetValue2(self._id, k, ComponentGetValue2(v.id, v.field))
+                    return
+                end
                 ComponentSetValue2(self._id, k, unpack(v))
                 return
             end
@@ -476,7 +397,7 @@ local function EntityGetFirstComponentWithTable(entity_id, t)
         f = v
     end
     if type(f) ~= "function" then
-        f = EntityGetFirstComponent
+        f = EntityGetFirstComponentIncludingDisabled
     end
     local component = f(entity_id, unpack(t))
     if component ~= nil then
@@ -491,14 +412,14 @@ local function EntityGetFirstComponentWithTable(entity_id, t)
     return EntityAddComponent2(entity_id, t[1], values)
 end
 ---@class ComponentField
----@type table|fun(component_type_name: string|table, tag: string|function?): ComponentField
+---@type table|fun(component_type_name: string|table, tag: string|function?, ...): ComponentField
 ComponentField = setmetatable({}, {
     __call = function(t, ...)
-        local f = select(select("#", ...), ...)
+        local f = select(-1, ...)
         if type(...) == "table" then
             f = EntityGetFirstComponentWithTable
         elseif type(f) ~= "function" then
-            f = EntityGetFirstComponent
+            f = EntityGetFirstComponentIncludingDisabled
         end
         return setmetatable({f, ...}, t)
     end,
@@ -511,7 +432,6 @@ function ComponentField:get(entity, k)
         rawset(entity, k, v)
         return v
     end
-    return null
 end
 
 ---@class VariableField
@@ -528,6 +448,16 @@ function VariableField:get(entity, k)
         return ComponentGetValue2(component, self.field)
     end
     EntityAddComponent2(entity.id, "VariableStorageComponent", {_tags = self.tag, [self.field] = self.default})
+    if self.default == nil then
+        if self.field == "value_string" then
+            return ""
+        elseif self.field == "value_int" then
+            return 0
+        elseif self.field == "value_bool" then
+            return false
+        end
+        return 0
+    end
     return self.default
 end
 
@@ -540,124 +470,32 @@ function VariableField:set(entity, k, v)
     EntityAddComponent2(entity.id, "VariableStorageComponent", {_tags = self.tag, [self.field] = v})
 end
 
-function Table(t, getters, setters)
-    return setmetatable(t, {
-        __index = function(t, k)
-            return (getters[k] or rawget)(t, k)
-        end,
-        __newindex = function(t, k, v)
-            (setters[k] or rawset)(t, k, v)
-        end,
-    })
+local serialized_field = {}
+serialized_field.__index = serialized_field
+function serialized_field:get(entity, k)
+    return deserialize(self[1]:get(entity, k))
 end
 
-function EntityAccessor(tag, pred)
-    return {
-        get = function(t, k)
-            local entity = EntityGetWithTag(tag)[1]
-            return (pred == nil or pred(entity)) and entity or nil
-        end,
-        set = function(t, k, v)
-            for i, entity in ipairs(EntityGetWithTag(tag)) do
-                EntityRemoveTag(entity, tag)
-            end
-            EntityAddTag(v, tag)
-        end,
-    }
+function serialized_field:set(entity, k, v)
+    self[1]:set(entity, k, serialize(v))
 end
 
-function ComponentAccessor(f, ...)
-    local args = {...}
-    local self = {}
-    self.get = function(t, k)
-        local component = f(t.id, unpack(args))
-        if component ~= nil then
-            local v = setmetatable({_id = component}, component_metatable)
-            rawset(t, k, v)
-            return v
-        end
-    end
-    return self
+function SerializedField(field)
+    return setmetatable({field}, serialized_field)
 end
 
-function ComponentValidAccessor(component_type_name, table_of_component_values)
-    return {
-        get = function(t, k)
-            local component = EntityGetFirstComponentIncludingDisabled(t.id, component_type_name, table_of_component_values._tags) or EntityAddComponent2(t.id, component_type_name, table_of_component_values)
-            local v = setmetatable({_id = component}, component_metatable)
-            rawset(t, k, v)
-            return v
-        end,
-    }
-end
-
-function VariableAccessor(tag, field, default)
-    local self = {}
-    self.get = function(t, k)
-        local component = rawget(t, self)
-        if component == nil then
-            local entity = t.id
-            if t.id == 0 then return end
-            component = EntityGetFirstComponent(entity, "VariableStorageComponent", tag) or EntityAddComponent2(entity, "VariableStorageComponent", {_tags = tag, [field] = default})
-            rawset(t, self, component)
-        end
-        return ComponentGetValue2(component, field)
-    end
-    self.set = function(t, k, v)
-        local component = rawget(t, self)
-        if component == nil then
-            local entity = t.id
-            if t.id == 0 then return end
-            component = EntityGetFirstComponent(entity, "VariableStorageComponent", tag) or EntityAddComponent2(entity, "VariableStorageComponent", {_tags = tag, [field] = default})
-            rawset(t, self, component)
-        end
-        ComponentSetValue2(component, field, v)
-    end
-    return self
-end
-
-function ConstantAccessor(value)
-    return {get = function() return value end}
-end
-
-function SerializedAccessor(accessor, filename, value_date_filename, file_date_filename)
-    if not ModDoesFileExist(value_date_filename) then
-        ModTextFileSetContent(value_date_filename, "1")
-    end
-    if not ModDoesFileExist(file_date_filename) then
-        ModTextFileSetContent(file_date_filename, "0")
-    end
-    local function get_value_date()
-        return tonumber(ModTextFileGetContent(value_date_filename))
-    end
-    local function set_value_date(n)
-        ModTextFileSetContent(value_date_filename, tostring(n))
-    end
-    local function get_file_date()
-        return tonumber(ModTextFileGetContent(file_date_filename))
-    end
-    local function set_file_date(n)
-        ModTextFileSetContent(file_date_filename, tostring(n))
-    end
-    local cache
-    local cache_date = 0
-    return {
-        get = function(t, k)
-            if cache_date < get_value_date() then
-                if get_file_date() < get_value_date() then
-                    ModTextFileSetContent(filename, "return " .. accessor.get(t, k))
-                    set_file_date(get_value_date())
+local object_metatable = {
+    __call = function(t, getters)
+        return setmetatable(t, {
+            __index = function(t, k)
+                local getter = getters[k]
+                if getter ~= nil then
+                    return getter(t, k)
                 end
-                cache = loadfile(filename)()
-                cache_date = get_value_date()
-            end
-            return cache
-        end,
-        set = function(t, k, v)
-            accessor.set(t, k, serialize(v))
-            set_value_date(get_value_date() + 1)
-            cache = v
-            cache_date = get_value_date()
-        end,
-    }
+            end,
+        })
+    end,
+}
+function Object(t)
+    return setmetatable(t, object_metatable)
 end
