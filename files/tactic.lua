@@ -2,13 +2,13 @@ dofile_once("data/scripts/lib/utilities.lua")
 
 --#region
 
-local ModTextFileSetContent = ModTextFileSetContent
-
 NUMERIC_CHARACTERS = "0123456789"
+
+local ModTextFileSetContent = ModTextFileSetContent
 
 function append_translations(filename)
     local common = "data/translations/common.csv"
-    ModTextFileSetContent(common, ModTextFileGetContent(common) .. ModTextFileGetContent(filename):gsub("(.-\n)", "", 1))
+    ModTextFileSetContent(common, ModTextFileGetContent(common) .. ModTextFileGetContent(filename):match("^.-\n(.*)$"))
 end
 
 function has_flag_run_or_add(flag)
@@ -19,12 +19,34 @@ function validate(id)
     return id and id > 0 and id or nil
 end
 
-function set_component_enabled(component, enabled)
-    EntitySetComponentIsEnabled(ComponentGetEntity(component), component, enabled)
-end
-
 function remove_component(component)
     EntityRemoveComponent(ComponentGetEntity(component), component)
+end
+
+function set_component_tags(component, tags)
+    local entity = ComponentGetEntity(component)
+    if validate(entity) then
+        for tag in ComponentGetTags(component):gmatch("[^,]+") do
+            ComponentRemoveTag(component, tag)
+        end
+        for i, tag in ipairs(tags) do
+            ComponentAddTag(component, tag)
+        end
+    end
+end
+
+function set_component_enabled(component, enabled)
+    local entity = ComponentGetEntity(component)
+    if validate(entity) then
+        EntitySetComponentIsEnabled(entity, component, enabled)
+    end
+end
+
+function refresh_sprite(sprite)
+    local entity = ComponentGetEntity(sprite)
+    if validate(entity) then
+        EntityRefreshSprite(entity, sprite)
+    end
 end
 
 function get_children(entity, ...)
@@ -48,8 +70,10 @@ local raw_gui
 
 function get_resolution(gui)
     if gui == nil then
-        gui = raw_gui or GuiCreate()
-        raw_gui = gui
+        if raw_gui == nil then
+            raw_gui = GuiCreate()
+        end
+        gui = raw_gui
     end
     local virtual_resolution_x = tonumber(MagicNumbersGetValue("VIRTUAL_RESOLUTION_X"))
     local screen_width, screen_height = GuiGetScreenDimensions(gui)
@@ -58,28 +82,32 @@ end
 
 function get_pos_on_screen(x, y, gui)
     if gui == nil then
-        gui = raw_gui or GuiCreate()
-        raw_gui = gui
+        if raw_gui == nil then
+            raw_gui = GuiCreate()
+        end
+        gui = raw_gui
     end
     local camera_x, camera_y = GameGetCameraPos()
     local bounds_x, bounds_y, bounds_width, bounds_height = GameGetCameraBounds()
     local resolution_width, resolution_height = get_resolution(gui)
     local screen_width, screen_height = GuiGetScreenDimensions(gui)
-    return (x - camera_x + bounds_width / 2 + tonumber(MagicNumbersGetValue("VIRTUAL_RESOLUTION_OFFSET_X"))) / resolution_width * screen_width,
-        (y - camera_y + bounds_height / 2 + tonumber(MagicNumbersGetValue("VIRTUAL_RESOLUTION_OFFSET_Y"))) / resolution_height * screen_height
+    return (x - camera_x + bounds_width * 0.5 + tonumber(MagicNumbersGetValue("VIRTUAL_RESOLUTION_OFFSET_X"))) / resolution_width * screen_width,
+        (y - camera_y + bounds_height * 0.5 + tonumber(MagicNumbersGetValue("VIRTUAL_RESOLUTION_OFFSET_Y"))) / resolution_height * screen_height
 end
 
 function get_pos_in_world(x, y, gui)
     if gui == nil then
-        gui = raw_gui or GuiCreate()
-        raw_gui = gui
+        if raw_gui == nil then
+            raw_gui = GuiCreate()
+        end
+        gui = raw_gui
     end
     local screen_width, screen_height = GuiGetScreenDimensions(gui)
     local resolution_width, resolution_height = get_resolution(gui)
     local camera_x, camera_y = GameGetCameraPos()
     local bounds_x, bounds_y, bounds_width, bounds_height = GameGetCameraBounds()
-    return x / screen_width * resolution_width + camera_x - bounds_width / 2 - tonumber(MagicNumbersGetValue("VIRTUAL_RESOLUTION_OFFSET_X")),
-        y / screen_height * resolution_height + camera_y - bounds_height / 2 - tonumber(MagicNumbersGetValue("VIRTUAL_RESOLUTION_OFFSET_Y"))
+    return x / screen_width * resolution_width + camera_x - bounds_width * 0.5 - tonumber(MagicNumbersGetValue("VIRTUAL_RESOLUTION_OFFSET_X")),
+        y / screen_height * resolution_height + camera_y - bounds_height * 0.5 - tonumber(MagicNumbersGetValue("VIRTUAL_RESOLUTION_OFFSET_Y"))
 end
 
 function get_last_component(components)
@@ -142,8 +170,8 @@ end
 function get_attack_ranged_pos(entity, attack_info)
     local x, y, rotation, scale_x, scale_y = EntityGetTransform(entity)
     local pos_x, pos_y = attack_info.offset_x, attack_info.offset_y
-    pos_x, pos_y = vec_rotate(pos_x, pos_y, rotation)
     pos_x, pos_y = vec_scale(pos_x, pos_y, scale_x, scale_y)
+    pos_x, pos_y = vec_rotate(pos_x, pos_y, rotation)
     pos_x, pos_y = vec_add(pos_x, pos_y, x, y)
     return pos_x, pos_y
 end
@@ -157,6 +185,51 @@ function new_id(s)
         ids[s] = id
         max_id = id - 1
     end
+    return id
+end
+
+function window_new(gui)
+    return {gui = gui, ids = {}, id = 0xFFFFFFFFFFFF}
+end
+
+function widget_list_begin(window, z)
+    GuiStartFrame(window.gui)
+    return {window = window, z = z, widgets = {}, counts = {}}
+end
+
+function widget_list_insert(widget_list, ...)
+    table.insert(widget_list.widgets, {...})
+end
+
+function widget_list_end(widget_list)
+    for i, widget in ipairs(widget_list.widgets) do
+        if widget_list.z ~= nil then
+            GuiZSetForNextWidget(widget_list.window.gui, #widget_list.widgets - i + widget_list.z)
+        end
+        widget[1](widget_list.window.gui, unpack(widget, 2))
+    end
+end
+
+function widget_list_id(widget_list, f)
+    local line = jit.util.funcinfo(f).currentline
+
+    local count = widget_list.counts[line]
+    if count == nil then
+        count = 0
+    else
+        count = count + 1
+    end
+    widget_list.counts[line] = count
+
+    local k = bit.bor(line, bit.lshift(count, 16))
+
+    local id = widget_list.window.ids[k]
+    if id == nil then
+        id = widget_list.window.id
+        widget_list.window.id = id - 1
+        widget_list.window.ids[k] = id
+    end
+
     return id
 end
 
@@ -201,9 +274,9 @@ function get_language()
 end
 
 function debug_print(...)
-    local t = {...}
-    for i, v in ipairs(t) do
-        t[i] = string.from(v)
+    local t = {}
+    for i = 1, select("#", ...) do
+        t[i] = string.from(select(i, ...))
     end
     local s = table.concat(t, ",")
     print(s)
@@ -214,6 +287,14 @@ end
 
 --#region
 
+local raw_tostring = tostring
+function tostring(v)
+    if type(v) ~= "number" then
+        return raw_tostring(v)
+    end
+    return ("%.99f"):format(v):match("^(.-)%.?0*$")
+end
+
 function string.from(value)
     if type(value) == "table" then
         local t = {}
@@ -223,10 +304,6 @@ function string.from(value)
         return ("{%s}"):format(table.concat(t, ","))
     end
     return tostring(value)
-end
-
-function string.asub(s, repl)
-    return s:gsub('(%g+)%s*=%s*"(.-)"', repl)
 end
 
 function string.raw(s)
@@ -318,7 +395,7 @@ end
 
 --#endregion
 
-local null = setmetatable({}, {__index = function(t) return t end, __newindex = function() end})
+local null = setmetatable({}, {__index = function(t, k) if type(k) == "string" and k:find("_$") then return t end end, __newindex = function() end})
 local function __index(t, k)
     local conditional = false
     if k:find("_$") then
@@ -326,7 +403,7 @@ local function __index(t, k)
         conditional = true
     end
     local field = getmetatable(t)[k]
-    assert(field ~= nil, "field does not exist: " .. k)
+    assert(field ~= nil or k == "id", "field does not exist: " .. k)
     if type(field) == "table" then
         local v = field:get(t, k)
         if v == nil and conditional then
@@ -346,7 +423,7 @@ end
 ---@type table|fun(fields: table): fun(entity_id: integer): Entity
 Entity = setmetatable({
     __call = function(t, entity_id)
-        return setmetatable({id = entity_id}, t)
+        return setmetatable({id = validate(entity_id)}, t)
     end,
 }, {
     __call = function(t, fields)
@@ -369,8 +446,17 @@ local vector_metatable = {
         ComponentSetValue2(self.id, self.field, unpack(values))
     end,
 }
+local getters = {_tags = ComponentGetTags, _enabled = ComponentGetIsEnabled, _entity = ComponentGetEntity, _members = ComponentGetMembers, _typename = ComponentGetTypeName}
+local setters = {_tags = set_component_tags, _enabled = set_component_enabled}
 local component_metatable = {
     __index = function(self, k)
+        if k:find("_$") then
+            k = k:sub(1, -2)
+        end
+        local f = getters[k]
+        if f ~= nil then
+            return f(self._id)
+        end
         local v = {ComponentGetValue2(self._id, k)}
         if #v > 1 then
             return setmetatable({id = self._id, field = k}, vector_metatable)
@@ -378,6 +464,11 @@ local component_metatable = {
         return v[1]
     end,
     __newindex = function(self, k, v)
+        local f = setters[k]
+        if f ~= nil then
+            f(self._id, v)
+            return
+        end
         if v ~= nil then
             if type(v) == "table" then
                 if getmetatable(v) == vector_metatable then
@@ -391,37 +482,43 @@ local component_metatable = {
         end
     end,
 }
-local function EntityGetFirstComponentWithTable(entity_id, t)
-    local f
-    for i, v in ipairs(t) do
+local function EntityGetFirstComponentWithValue(entity_id, table_of_component_values, ...)
+    local f = EntityGetFirstComponentIncludingDisabled
+    local t = {...}
+    local v = select(-1, ...)
+    if type(v) == "function" then
         f = v
-    end
-    if type(f) ~= "function" then
-        f = EntityGetFirstComponentIncludingDisabled
+        t[#t] = nil
     end
     local component = f(entity_id, unpack(t))
     if component ~= nil then
         return component
     end
-    local values = {}
-    for k, v in pairs(t) do
-        if type(k) == "string" then
-            values[k] = v
-        end
-    end
-    return EntityAddComponent2(entity_id, t[1], values)
+    return EntityAddComponent2(entity_id, ..., table_of_component_values)
 end
 ---@class ComponentField
 ---@type table|fun(component_type_name: string|table, tag: string|function?, ...): ComponentField
 ComponentField = setmetatable({}, {
     __call = function(t, ...)
-        local f = select(-1, ...)
-        if type(...) == "table" then
-            f = EntityGetFirstComponentWithTable
-        elseif type(f) ~= "function" then
-            f = EntityGetFirstComponentIncludingDisabled
+        local field = {EntityGetFirstComponentIncludingDisabled, ...}
+        local v = select(-1, ...)
+        local s = type(v)
+        if s == "table" then
+            local table_of_component_values
+            for k, v in pairs(v) do
+                if type(k) == "string" then
+                    if table_of_component_values == nil then
+                        table_of_component_values = {}
+                    end
+                    table_of_component_values[k] = v
+                end
+            end
+            field = {EntityGetFirstComponentWithValue, table_of_component_values, unpack(v)}
+        elseif s == "function" then
+            field[1] = v
+            field[#field] = nil
         end
-        return setmetatable({f, ...}, t)
+        return setmetatable(field, t)
     end,
 })
 ComponentField.__index = ComponentField
@@ -443,31 +540,73 @@ VariableField = setmetatable({}, {
 })
 VariableField.__index = VariableField
 function VariableField:get(entity, k)
-    local component = EntityGetFirstComponentIncludingDisabled(entity.id, "VariableStorageComponent", self.tag)
-    if component ~= nil then
-        return ComponentGetValue2(component, self.field)
+    local variable = EntityGetFirstComponentIncludingDisabled(entity.id, "VariableStorageComponent", self.tag)
+    if variable ~= nil then
+        return ComponentGetValue2(variable, self.field)
+    elseif self.default ~= nil then
+        return self.default
+    elseif self.field == "value_string" then
+        return ""
+    elseif self.field == "value_bool" then
+        return false
     end
-    EntityAddComponent2(entity.id, "VariableStorageComponent", {_tags = self.tag, [self.field] = self.default})
-    if self.default == nil then
-        if self.field == "value_string" then
-            return ""
-        elseif self.field == "value_int" then
-            return 0
-        elseif self.field == "value_bool" then
-            return false
-        end
-        return 0
-    end
-    return self.default
+    return 0
 end
 
 function VariableField:set(entity, k, v)
-    local component = EntityGetFirstComponentIncludingDisabled(entity.id, "VariableStorageComponent", self.tag)
-    if component ~= nil then
-        ComponentSetValue2(component, self.field, v)
-        return
+    if entity.id ~= nil then
+        local variable = EntityGetFirstComponentIncludingDisabled(entity.id, "VariableStorageComponent", self.tag)
+        if variable ~= nil then
+            ComponentSetValue2(variable, self.field, v)
+            return
+        end
+        EntityAddComponent2(entity.id, "VariableStorageComponent", {_tags = self.tag, [self.field] = v})
     end
-    EntityAddComponent2(entity.id, "VariableStorageComponent", {_tags = self.tag, [self.field] = v})
+end
+
+local file_field = {}
+file_field.__index = file_field
+function file_field:get()
+    return ModTextFileGetContent(self[1])
+end
+
+function file_field:set(entity, k, v)
+    ModTextFileSetContent(self[1], tostring(v))
+end
+
+function FileField(filename, default)
+    if default ~= nil then
+        ModTextFileSetContent(filename, default)
+    end
+    return setmetatable({filename}, file_field)
+end
+
+local combined_field = {}
+combined_field.__index = combined_field
+function combined_field:get(entity, k)
+    return self[2](self[1]:get(entity, k))
+end
+
+function combined_field:set(entity, k, v)
+    self[1]:set(entity, k, v)
+end
+
+function CombinedField(field, f)
+    return setmetatable({field, f}, combined_field)
+end
+
+local numeric_field = {}
+numeric_field.__index = numeric_field
+function numeric_field:get(entity, k)
+    return tonumber(self[1]:get(entity, k))
+end
+
+function numeric_field:set(entity, k, v)
+    self[1]:set(entity, k, v)
+end
+
+function NumericField(field)
+    return setmetatable({field}, numeric_field)
 end
 
 local serialized_field = {}
